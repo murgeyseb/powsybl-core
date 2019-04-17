@@ -15,7 +15,6 @@ import com.powsybl.iidm.network.test.*;
 
 import org.junit.Assert;
 import org.junit.Test;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,16 +33,16 @@ public class AmplNetworkWriterTest extends AbstractConverterTest {
 
     @Test
     public void test() {
-        AmplExporter exporter = new AmplExporter();
+        AmplExporter exporter = new AmplExporter(platformConfig);
         Assert.assertEquals("AMPL", exporter.getFormat());
     }
 
     @Test
     public void writeEurostag() throws IOException {
-        Network network = EurostagTutorialExample1Factory.create();
+        Network network = EurostagTutorialExample1Factory.createWithMoreGenerators();
 
         MemDataSource dataSource = new MemDataSource();
-        AmplExporter exporter = new AmplExporter();
+        AmplExporter exporter = new AmplExporter(platformConfig);
         exporter.export(network, new Properties(), dataSource);
 
         assertEqualsToRef(dataSource, "_network_substations", "inputs/eurostag-tutorial-example1-substations.txt");
@@ -81,12 +80,22 @@ public class AmplNetworkWriterTest extends AbstractConverterTest {
 
     @Test
     public void writeSVC() throws IOException {
-        Network network = SvcTestCaseFactory.create();
+        Network network = SvcTestCaseFactory.createWithMoreSVCs();
 
         MemDataSource dataSource = new MemDataSource();
         export(network, dataSource);
 
         assertEqualsToRef(dataSource, "_network_static_var_compensators", "inputs/svc-test-case.txt");
+    }
+
+    @Test
+    public void writeBattery() throws IOException {
+        Network network = BatteryNetworkFactory.create();
+
+        MemDataSource dataSource = new MemDataSource();
+        export(network, dataSource);
+
+        assertEqualsToRef(dataSource, "_network_batteries", "inputs/battery-test-batteries.txt");
     }
 
     @Test
@@ -151,8 +160,8 @@ public class AmplNetworkWriterTest extends AbstractConverterTest {
         assertEqualsToRef(dataSource, "foo-extension", "inputs/foo-extension.txt");
     }
 
-    private static void export(Network network, DataSource dataSource) {
-        AmplExporter exporter = new AmplExporter();
+    private void export(Network network, DataSource dataSource) {
+        AmplExporter exporter = new AmplExporter(platformConfig);
         exporter.export(network, new Properties(), dataSource);
     }
 }

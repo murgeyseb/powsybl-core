@@ -12,33 +12,38 @@ import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 import com.powsybl.commons.PowsyblException;
 import com.powsybl.commons.config.ComponentDefaultConfig;
-import com.powsybl.tools.Command;
-import com.powsybl.tools.Tool;
-import com.powsybl.tools.ToolRunningContext;
+import com.powsybl.commons.io.table.AbstractTableFormatter;
+import com.powsybl.commons.io.table.AsciiTableFormatter;
+import com.powsybl.commons.io.table.Column;
 import com.powsybl.computation.ComputationManager;
 import com.powsybl.contingency.ContingenciesProvider;
 import com.powsybl.contingency.ContingenciesProviderFactory;
+import com.powsybl.iidm.import_.ImportConfig;
 import com.powsybl.iidm.import_.Importers;
 import com.powsybl.iidm.network.Network;
+import com.powsybl.iidm.tools.ConversionToolUtils;
 import com.powsybl.simulation.securityindexes.SecurityIndex;
 import com.powsybl.simulation.securityindexes.SecurityIndexId;
 import com.powsybl.simulation.securityindexes.SecurityIndexType;
+import com.powsybl.tools.Command;
+import com.powsybl.tools.Tool;
+import com.powsybl.tools.ToolRunningContext;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
-import org.nocrala.tools.texttablefmt.BorderStyle;
-import org.nocrala.tools.texttablefmt.Table;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.PrintStream;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.powsybl.iidm.tools.ConversionToolUtils.createImportParameterOption;
+import static com.powsybl.iidm.tools.ConversionToolUtils.createImportParametersFileOption;
+import static com.powsybl.iidm.tools.ConversionToolUtils.readProperties;
 
 /**
  *
@@ -92,6 +97,8 @@ public class ImpactAnalysisTool implements Tool {
                         .hasArg()
                         .argName("FILE")
                         .build());
+                options.addOption(createImportParametersFileOption());
+                options.addOption(createImportParameterOption());
                 return options;
             }
 
@@ -128,21 +135,25 @@ public class ImpactAnalysisTool implements Tool {
     }
 
     private static void prettyPrint(Multimap<String, SecurityIndex> securityIndexesPerContingency, PrintStream out) {
-        Table table = new Table(1 + SecurityIndexType.values().length, BorderStyle.CLASSIC_WIDE);
-        table.addCell("Contingency");
+        List<Column> columns = new ArrayList<>(SecurityIndexType.values().length + 1);
+        columns.add(new Column("Contingency"));
         for (SecurityIndexType securityIndexType : SecurityIndexType.values()) {
-            table.addCell(securityIndexType.toString());
+            columns.add(new Column(securityIndexType.toString()));
         }
+        Column[] arrayColumns = columns.toArray(new Column[0]);
 
-        for (Map.Entry<String, Collection<SecurityIndex>> entry : securityIndexesPerContingency.asMap().entrySet()) {
-            String contingencyId = entry.getKey();
-            table.addCell(contingencyId);
-            for (String str : toRow(entry.getValue())) {
-                table.addCell(str);
+        Writer writer = new OutputStreamWriter(out);
+        try (AbstractTableFormatter formatter = new AsciiTableFormatter(writer, null, arrayColumns)) {
+            for (Map.Entry<String, Collection<SecurityIndex>> entry : securityIndexesPerContingency.asMap().entrySet()) {
+                String contingencyId = entry.getKey();
+                formatter.writeCell(contingencyId);
+                for (String str : toRow(entry.getValue())) {
+                    formatter.writeCell(str);
+                }
             }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
-
-        out.println(table.render());
     }
 
     private static void writeCsv(Multimap<String, SecurityIndex> securityIndexesPerContingency, Path outputCsvFile) throws IOException {
@@ -247,21 +258,22 @@ public class ImpactAnalysisTool implements Tool {
         SimulatorFactory simulatorFactory = defaultConfig.newFactoryImpl(SimulatorFactory.class);
 
         if (Files.isRegularFile(caseFile)) {
-            runSingleAnalysis(context, caseFile, outputCsvFile, contingencyIds, contingenciesProvider, simulatorFactory);
+            runSingleAnalysis(line, context, caseFile, outputCsvFile, contingencyIds, contingenciesProvider, simulatorFactory);
         } else if (Files.isDirectory(caseFile)) {
-            runMultipleAnalyses(context, caseFile, outputCsvFile, contingencyIds, contingenciesProvider, simulatorFactory);
+            runMultipleAnalyses(line, context, caseFile, outputCsvFile, contingencyIds, contingenciesProvider, simulatorFactory);
         }
     }
 
-    private void runSingleAnalysis(ToolRunningContext context, Path caseFile, Path outputCsvFile, Set<String> contingencyIds, ContingenciesProvider contingenciesProvider,
+    private void runSingleAnalysis(CommandLine line, ToolRunningContext context, Path caseFile, Path outputCsvFile, Set<String> contingencyIds, ContingenciesProvider contingenciesProvider,
                                    SimulatorFactory simulatorFactory) throws Exception {
         context.getOutputStream().println("loading case " + caseFile + "...");
         // load the network
-        Network network = Importers.loadNetwork(caseFile);
+        Properties inputParams = readProperties(line, ConversionToolUtils.OptionType.IMPORT, context);
+        Network network = Importers.loadNetwork(caseFile, context.getShortTimeExecutionComputationManager(), ImportConfig.load(), inputParams);
         if (network == null) {
             throw new PowsyblException("Case '" + caseFile + "' not found");
         }
-        network.getStateManager().allowStateMultiThreadAccess(true);
+        network.getVariantManager().allowVariantMultiThreadAccess(true);
 
         Multimap<String, SecurityIndex> securityIndexesPerContingency
                 = runImpactAnalysis(network, contingencyIds, context.getShortTimeExecutionComputationManager(),
@@ -276,13 +288,14 @@ public class ImpactAnalysisTool implements Tool {
         }
     }
 
-    private void runMultipleAnalyses(ToolRunningContext context, Path caseFile, Path outputCsvFile, Set<String> contingencyIds, ContingenciesProvider contingenciesProvider,
+    private void runMultipleAnalyses(CommandLine line, ToolRunningContext context, Path caseFile, Path outputCsvFile, Set<String> contingencyIds, ContingenciesProvider contingenciesProvider,
                                      SimulatorFactory simulatorFactory) throws Exception {
         if (outputCsvFile == null) {
             throw new PowsyblException("In case of multiple impact analyses, only output to csv file is supported");
         }
         Map<String, Map<SecurityIndexId, SecurityIndex>> securityIndexesPerCase = new LinkedHashMap<>();
-        Importers.loadNetworks(caseFile, false, network -> {
+        Properties inputParams = readProperties(line, ConversionToolUtils.OptionType.IMPORT, context);
+        Importers.loadNetworks(caseFile, false, context.getShortTimeExecutionComputationManager(), ImportConfig.load(), inputParams, network -> {
             try {
                 Multimap<String, SecurityIndex> securityIndexesPerContingency
                         = runImpactAnalysis(network, contingencyIds, context.getShortTimeExecutionComputationManager(),

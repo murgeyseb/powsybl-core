@@ -14,7 +14,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.powsybl.cgmes.conversion.Conversion;
+import com.powsybl.cgmes.conversion.Context;
 import com.powsybl.cgmes.model.CgmesNames;
 import com.powsybl.iidm.network.PhaseTapChanger;
 import com.powsybl.iidm.network.PhaseTapChangerAdder;
@@ -29,7 +29,9 @@ import com.powsybl.triplestore.api.PropertyBags;
  */
 public class PhaseTapChangerConversion extends AbstractIdentifiedObjectConversion {
 
-    public PhaseTapChangerConversion(PropertyBag ptc, Conversion.Context context) {
+    private static final String REGULATING_CONTROL_ENABLED = "regulatingControlEnabled";
+
+    public PhaseTapChangerConversion(PropertyBag ptc, Context context) {
         super("PhaseTapChanger", ptc, context);
 
         configIsInvertVoltageStepIncrementOutOfPhase = false;
@@ -63,7 +65,7 @@ public class PhaseTapChangerConversion extends AbstractIdentifiedObjectConversio
                         tx3.getSubstation().getName());
                 // Check if the step is at neutral and regulating control is disabled
                 int position = fromContinuous(p.asDouble("SVtapStep", neutralStep));
-                boolean regulating = p.asBoolean("regulatingControlEnabled", false);
+                boolean regulating = p.asBoolean(REGULATING_CONTROL_ENABLED, false);
                 if (position == neutralStep && !regulating) {
                     String reason = String.format(
                             "%s, but is at neutralStep and regulating control disabled", reason0);
@@ -125,21 +127,29 @@ public class PhaseTapChangerConversion extends AbstractIdentifiedObjectConversio
     }
 
     private void addStepsFromTable(PhaseTapChangerAdder ptca) {
-        String tableId = p.getId("PhaseTapChangerTable");
+        String tableId = p.getId(CgmesNames.PHASE_TAP_CHANGER_TABLE);
+        if (tableId == null) {
+            missing(CgmesNames.PHASE_TAP_CHANGER_TABLE);
+            return;
+        }
         LOG.debug("PhaseTapChanger {} table {}", id, tableId);
         PropertyBags table = context.cgmes().phaseTapChangerTable(tableId);
+        if (table.isEmpty()) {
+            missing("points for PhaseTapChangerTable " + tableId);
+            return;
+        }
         Comparator<PropertyBag> byStep = Comparator.comparingInt((PropertyBag p) -> p.asInt("step"));
         table.sort(byStep);
         for (PropertyBag point : table) {
             double alpha = point.asDouble("angle");
-            double rho = point.asDouble("ratio");
+            double rho = point.asDouble("ratio", 1.0);
             // When given in PhaseTapChangerTablePoint
             // r, x, g, b of the step are already percentage deviations of nominal values
-            double r = point.asDouble("r", 0);
-            double x = point.asDouble("x", 0);
-            double g = point.asDouble("g", 0);
-            double b = point.asDouble("b", 0);
             int step = point.asInt("step");
+            double r = fixing(point, "r", 0, tableId, step);
+            double x = fixing(point, "x", 0, tableId, step);
+            double g = fixing(point, "g", 0, tableId, step);
+            double b = fixing(point, "b", 0, tableId, step);
             // Impedance/admittance deviation is required when tap changer is defined at
             // side 2
             // (In IIDM model the ideal ratio is always at side 1, left of impedance)
@@ -165,6 +175,17 @@ public class PhaseTapChangerConversion extends AbstractIdentifiedObjectConversio
                     .setB(b + dy + b * dy / 100)
                     .endStep();
         }
+    }
+
+    private double fixing(PropertyBag point, String attr, double defaultValue, String tableId, int step) {
+        double value = point.asDouble(attr, defaultValue);
+        if (Double.isNaN(value)) {
+            fixed(
+                "PhaseTapChangerTablePoint " + attr + " for step " + step + " in table " + tableId,
+                "invalid value " + point.get(attr));
+            return defaultValue;
+        }
+        return value;
     }
 
     private double du0() {
@@ -394,34 +415,58 @@ public class PhaseTapChangerConversion extends AbstractIdentifiedObjectConversio
     }
 
     private void addRegulatingControl(PhaseTapChangerAdder ptca) {
-        // TODO How to obtain terminal of corresponding winding ?
-        // Only one transformer end is available for the tap changer
-        String terminal1 = p.getId("Terminal1");
-        String terminal2 = p.getId("Terminal2");
-
-        String regulatingControl = p.getId("RegulatingControl");
+        String regulatingControl = p.getId("TapChangerControl");
         String regulatingControlMode = p.getLocal("regulatingControlMode");
-        double regulatingControlTargetValue = p.asDouble("regulatingControlTargetValue");
-        String regulatingControlTerminal = p.getId("RegulatingControlTerminal");
         if (regulatingControl != null) {
             if (regulatingControlMode.endsWith("currentFlow")) {
-                Terminal treg;
-                if (regulatingControlTerminal.equals(terminal1)) {
-                    treg = tx.getTerminal1();
-                } else if (regulatingControlTerminal.equals(terminal2)) {
-                    treg = tx.getTerminal2();
-                } else {
-                    treg = context.terminalMapping().find(regulatingControlTerminal);
-                }
-                ptca.setRegulationMode(PhaseTapChanger.RegulationMode.CURRENT_LIMITER)
-                        .setRegulationValue(regulatingControlTargetValue)
-                        .setRegulating(true)
-                        .setRegulationTerminal(treg);
+                addCurrentFlowRegControl(ptca);
+            } else if (regulatingControlMode.endsWith("activePower")) {
+                addActivePowerRegControl(ptca);
             } else if (regulatingControlMode.endsWith("fixed")) {
                 // Nothing to do
             } else {
                 ignored(regulatingControlMode, "Unsupported regulating mode");
             }
+        }
+    }
+
+    private void addCurrentFlowRegControl(PhaseTapChangerAdder ptca) {
+        Terminal treg = context.terminalMapping().find(p.getId("RegulatingControlTerminal"));
+        boolean regulatingControlEnabled  = p.asBoolean(REGULATING_CONTROL_ENABLED, true);
+        double targetV = p.asDouble("regulatingControlTargetValue");
+        if (side == 1) {
+            targetV *= tx.getRatedU1();
+        } else {
+            targetV *= tx.getRatedU2();
+        }
+        ptca.setRegulationMode(PhaseTapChanger.RegulationMode.CURRENT_LIMITER)
+                .setRegulationValue(regulationValue(targetV, treg))
+                .setRegulating(regulatingControlEnabled)
+                .setRegulationTerminal(regTerminal());
+    }
+
+    private void addActivePowerRegControl(PhaseTapChangerAdder ptca) {
+        Terminal treg = context.terminalMapping().find(p.getId("RegulatingControlTerminal"));
+        boolean regulatingControlEnabled  = p.asBoolean(REGULATING_CONTROL_ENABLED, true);
+        double targetV = -p.asDouble("regulatingControlTargetValue");
+        ptca.setRegulationMode(PhaseTapChanger.RegulationMode.ACTIVE_POWER_CONTROL)
+                .setRegulationTerminal(regTerminal())
+                .setRegulating(regulatingControlEnabled)
+                .setRegulationValue(regulationValue(targetV, treg));
+    }
+
+    private double regulationValue(double targetV, Terminal treg) {
+        if ((treg.equals(tx.getTerminal1()) && side == 2) || (treg.equals(tx.getTerminal2()) && side == 1)) {
+            return -targetV;
+        }
+        return targetV;
+    }
+
+    private Terminal regTerminal() {
+        if (side == 1) {
+            return tx.getTerminal1();
+        } else {
+            return tx.getTerminal2();
         }
     }
 

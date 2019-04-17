@@ -6,31 +6,28 @@
  */
 package com.powsybl.iidm.xml;
 
-import com.google.common.jimfs.Configuration;
-import com.google.common.jimfs.Jimfs;
-import com.powsybl.commons.config.InMemoryPlatformConfig;
-import com.powsybl.commons.config.PlatformConfig;
+import com.powsybl.commons.AbstractConverterTest;
 import com.powsybl.commons.datasource.FileDataSource;
+import com.powsybl.commons.datasource.ReadOnlyDataSource;
+import com.powsybl.commons.datasource.ResourceDataSource;
+import com.powsybl.commons.datasource.ResourceSet;
+import com.powsybl.iidm.IidmImportExportMode;
 import com.powsybl.iidm.network.Network;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystem;
 import java.nio.file.Files;
-import java.util.Properties;
+import java.util.*;
 
 import static org.junit.Assert.*;
 
 /**
  * @author Geoffroy Jamgotchian <geoffroy.jamgotchian at rte-france.com>
  */
-public class XMLImporterTest {
-
-    private FileSystem fileSystem;
+public class XMLImporterTest extends AbstractConverterTest {
 
     private XMLImporter importer;
 
@@ -66,9 +63,8 @@ public class XMLImporterTest {
     }
 
     @Before
-    public void setUp() throws Exception {
-        fileSystem = Jimfs.newFileSystem(Configuration.unix());
-
+    public void setUp() throws IOException {
+        super.setUp();
         // create test files
         //   /test0.xiidm
         //   /test1.iidm
@@ -89,33 +85,28 @@ public class XMLImporterTest {
         }
         writeNetworkWithComment("/test7.xiidm");
 
-        PlatformConfig platformConfig = new InMemoryPlatformConfig(fileSystem);
         importer = new XMLImporter(platformConfig);
     }
 
-    @After
-    public void tearDown() throws Exception {
-        fileSystem.close();
-    }
-
     @Test
-    public void getFormat() throws Exception {
+    public void getFormat() {
         assertEquals("XIIDM", importer.getFormat());
     }
 
     @Test
-    public void getParameters() throws Exception {
+    public void getParameters() {
         assertEquals(1, importer.getParameters().size());
-        assertEquals("throwExceptionIfExtensionNotFound", importer.getParameters().get(0).getName());
+        assertEquals("iidm.import.xml.throw-exception-if-extension-not-found", importer.getParameters().get(0).getName());
+        assertEquals(Arrays.asList("iidm.import.xml.throw-exception-if-extension-not-found", "throwExceptionIfExtensionNotFound"), importer.getParameters().get(0).getNames());
     }
 
     @Test
-    public void getComment() throws Exception {
+    public void getComment() {
         assertEquals("IIDM XML v 1.0 importer", importer.getComment());
     }
 
     @Test
-    public void exists() throws Exception {
+    public void exists() {
         assertTrue(importer.exists(new FileDataSource(fileSystem.getPath("/"), "test0")));
         assertTrue(importer.exists(new FileDataSource(fileSystem.getPath("/"), "test1")));
         assertTrue(importer.exists(new FileDataSource(fileSystem.getPath("/"), "test2")));
@@ -141,7 +132,7 @@ public class XMLImporterTest {
     }
 
     @Test
-    public void importData() throws Exception {
+    public void importData() {
         // should be ok
         assertNotNull(importer.importData(new FileDataSource(fileSystem.getPath("/"), "test0"), null));
 
@@ -156,10 +147,21 @@ public class XMLImporterTest {
         assertNotNull(importer.importData(new FileDataSource(fileSystem.getPath("/"), "test5"), null));
 
         // extension plugin will be not found but option is set to throw an exception
+        // (deprecated parameter name)
         Properties params = new Properties();
         params.put("throwExceptionIfExtensionNotFound", "true");
         try {
             importer.importData(new FileDataSource(fileSystem.getPath("/"), "test5"), params);
+            fail();
+        } catch (RuntimeException ignored) {
+        }
+
+        // extension plugin will be not found but option is set to throw an exception
+        // (parameter name following same naming convention of XmlExporter)
+        Properties params2 = new Properties();
+        params2.put("iidm.import.xml.throw-exception-if-extension-not-found", "true");
+        try {
+            importer.importData(new FileDataSource(fileSystem.getPath("/"), "test5"), params2);
             fail();
         } catch (RuntimeException ignored) {
         }
@@ -170,5 +172,88 @@ public class XMLImporterTest {
 
         Network network2 = importer.importData(new FileDataSource(fileSystem.getPath("/"), "test7"), null);
         assertNotNull(network2.getSubstation("P1"));
+    }
+
+    @Test
+    public void importDataFromTwoFiles() {
+        Properties parameters = new Properties();
+        parameters.put(XMLImporter.IMPORT_MODE, String.valueOf(IidmImportExportMode.EXTENSIONS_IN_ONE_SEPARATED_FILE));
+
+        ReadOnlyDataSource dataSource = new ResourceDataSource("multiple-extensions", new ResourceSet("/", "multiple-extensions.xiidm", "multiple-extensions-ext.xiidm"));
+        Network network = importer.importData(dataSource, parameters);
+        assertNotNull(network);
+        assertEquals(2, network.getLoad("LOAD").getExtensions().size());
+        assertEquals(1, network.getLoad("LOAD2").getExtensions().size());
+    }
+
+    @Test
+    public void importDataFromMultipleFilesTest1() {
+        List<String> extensionsList = Arrays.asList("loadFoo", "loadBar");
+
+        Properties parameters = new Properties();
+
+        parameters.put(XMLImporter.IMPORT_MODE, String.valueOf(IidmImportExportMode.ONE_SEPARATED_FILE_PER_EXTENSION_TYPE));
+        parameters.put(XMLImporter.EXTENSIONS_LIST, extensionsList);
+
+        ReadOnlyDataSource dataSourceBase = new ResourceDataSource("multiple-extensions", new ResourceSet("/", "multiple-extensions.xiidm", "multiple-extensions-loadFoo.xiidm", "multiple-extensions-loadBar.xiidm"));
+        Network network = importer.importData(dataSourceBase, parameters);
+        assertNotNull(network);
+        assertEquals(2, network.getLoad("LOAD").getExtensions().size());
+        assertEquals(1, network.getLoad("LOAD2").getExtensions().size());
+    }
+
+    @Test
+    public void importDataFromMultipleFilesTest2() {
+        List<String> extensionsList = Arrays.asList("loadFoo");
+
+        Properties parameters = new Properties();
+        parameters.put(XMLImporter.IMPORT_MODE, String.valueOf(IidmImportExportMode.ONE_SEPARATED_FILE_PER_EXTENSION_TYPE));
+        parameters.put(XMLImporter.EXTENSIONS_LIST, extensionsList);
+
+        ReadOnlyDataSource dataSourceBase = new ResourceDataSource("multiple-extensions", new ResourceSet("/", "multiple-extensions.xiidm", "multiple-extensions-loadFoo.xiidm"));
+        Network network = importer.importData(dataSourceBase, parameters);
+        assertNotNull(network);
+        assertEquals(1, network.getLoad("LOAD").getExtensions().size());
+        assertEquals(1, network.getLoad("LOAD2").getExtensions().size());
+    }
+
+    @Test
+    public void importDataFromMultipleFilesTest3() {
+        Properties parameters = new Properties();
+        parameters.put(XMLImporter.IMPORT_MODE, String.valueOf(IidmImportExportMode.ONE_SEPARATED_FILE_PER_EXTENSION_TYPE));
+
+        ReadOnlyDataSource dataSourceBase = new ResourceDataSource("multiple-extensions", new ResourceSet("/", "multiple-extensions.xiidm", "multiple-extensions-loadFoo.xiidm"));
+        Network network = importer.importData(dataSourceBase, parameters);
+        assertNotNull(network);
+        assertEquals(1, network.getLoad("LOAD").getExtensions().size());
+        assertEquals(1, network.getLoad("LOAD2").getExtensions().size());
+    }
+
+    public Network importFromSingleFile(List<String> extensionsList) {
+        Properties parameters = new Properties();
+        parameters.put(XMLImporter.EXTENSIONS_LIST, extensionsList);
+
+        ReadOnlyDataSource dataSourceBase = new ResourceDataSource("multiple-extensions", new ResourceSet("/", "multiple-extensions.xml"));
+        Network network = importer.importData(dataSourceBase, parameters);
+        assertNotNull(network);
+        return network;
+    }
+
+    @Test
+    public void importFromSingleFileTest() {
+        List<String> extensionsList = Arrays.asList();
+        Network network = importFromSingleFile(extensionsList);
+        assertEquals(0, network.getLoad("LOAD").getExtensions().size());
+        assertEquals(0, network.getLoad("LOAD2").getExtensions().size());
+
+        List<String> extensionsList1 = Arrays.asList("loadBar");
+        Network network1 = importFromSingleFile(extensionsList1);
+        assertEquals(1, network1.getLoad("LOAD").getExtensions().size());
+        assertEquals(0, network1.getLoad("LOAD2").getExtensions().size());
+
+        List<String> extensionsList2 = Arrays.asList("loadFoo");
+        Network network2 = importFromSingleFile(extensionsList2);
+        assertEquals(1, network2.getLoad("LOAD").getExtensions().size());
+        assertEquals(1, network2.getLoad("LOAD2").getExtensions().size());
     }
 }

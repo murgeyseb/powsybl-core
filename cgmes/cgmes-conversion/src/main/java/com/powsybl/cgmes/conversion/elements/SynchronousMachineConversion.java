@@ -7,18 +7,19 @@
 
 package com.powsybl.cgmes.conversion.elements;
 
-import com.powsybl.cgmes.conversion.Conversion;
+import com.powsybl.cgmes.conversion.Context;
 import com.powsybl.cgmes.model.PowerFlow;
 import com.powsybl.iidm.network.EnergySource;
 import com.powsybl.iidm.network.Generator;
+import com.powsybl.iidm.network.GeneratorAdder;
 import com.powsybl.triplestore.api.PropertyBag;
 
 /**
  * @author Luma Zamarreño <zamarrenolm at aia.es>
  */
-public class SynchronousMachineConversion extends AbstractConductingEquipmentConversion {
+public class SynchronousMachineConversion extends AbstractReactiveLimitsOwnerConversion {
 
-    public SynchronousMachineConversion(PropertyBag sm, Conversion.Context context) {
+    public SynchronousMachineConversion(PropertyBag sm, Context context) {
         super("SynchronousMachine", sm, context);
     }
 
@@ -31,36 +32,34 @@ public class SynchronousMachineConversion extends AbstractConductingEquipmentCon
         String generatingUnitType = p.getLocal("generatingUnitType");
         PowerFlow f = powerFlow();
 
+        // Default targetP from initial P defined in EQ GeneratingUnit
         double targetP = p.asDouble("initialP", 0);
         double targetQ = 0;
+        // Flow values may come from Terminal or Equipment (SSH RotatingMachine)
         if (f.defined()) {
             targetP = -f.p();
             targetQ = -f.q();
         }
 
         RegulatingControlConversion.Data control = RegulatingControlConversion.convert(
+                iidmId(),
                 p,
                 voltageLevel(),
                 context);
-        Generator g = voltageLevel().newGenerator()
-                .setId(iidmId())
-                .setName(iidmName())
-                .setEnsureIdUnicity(false)
-                .setBus(terminalConnected() ? busId() : null)
-                .setConnectableBus(busId())
+        GeneratorAdder adder = voltageLevel().newGenerator()
                 .setMinP(minP)
                 .setMaxP(maxP)
                 .setVoltageRegulatorOn(control.on())
-                .setRegulatingTerminal(control.terminal())
                 .setTargetP(targetP)
                 .setTargetQ(targetQ)
                 .setTargetV(control.targetV())
                 .setEnergySource(fromGeneratingUnitType(generatingUnitType))
-                .setRatedS(ratedS)
-                .add();
-
+                .setRatedS(ratedS);
+        identify(adder);
+        connect(adder);
+        Generator g = adder.add();
         convertedTerminals(g.getTerminal());
-        ReactiveLimitsConversion.convert(p, g);
+        convertReactiveLimits(g);
     }
 
     private static EnergySource fromGeneratingUnitType(String gut) {

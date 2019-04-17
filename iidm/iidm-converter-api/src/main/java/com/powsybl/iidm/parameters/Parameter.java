@@ -6,14 +6,16 @@
  */
 package com.powsybl.iidm.parameters;
 
-import java.util.Objects;
+import com.powsybl.commons.PowsyblException;
+
+import java.util.*;
 
 /**
  * @author Geoffroy Jamgotchian <geoffroy.jamgotchian at rte-france.com>
  */
 public class Parameter {
 
-    private final String name;
+    private final List<String> names = new ArrayList<>();
 
     private final ParameterType type;
 
@@ -22,17 +24,35 @@ public class Parameter {
     private final Object defaultValue;
 
     public Parameter(String name, ParameterType type, String description, Object defaultValue) {
-        if (!type.getClazz().isAssignableFrom(defaultValue.getClass())) {
+        if (defaultValue != null && !type.getClazz().isAssignableFrom(defaultValue.getClass())) {
             throw new IllegalArgumentException("Bad default value type " + defaultValue.getClass() + ", " + type.getClazz() + " was expected");
         }
-        this.name = Objects.requireNonNull(name);
+        names.add(Objects.requireNonNull(name));
         this.type = Objects.requireNonNull(type);
         this.description = Objects.requireNonNull(description);
-        this.defaultValue = Objects.requireNonNull(defaultValue);
+        checkDefaultValue(defaultValue);
+        this.defaultValue = defaultValue;
+    }
+
+    private void checkDefaultValue(Object defaultValue) {
+        if (this.type == ParameterType.BOOLEAN && defaultValue == null) {
+            throw new PowsyblException("With Boolean parameter you are not allowed to pass a null default value");
+        }
+    }
+
+    public Parameter addAdditionalNames(String... names) {
+        Objects.requireNonNull(names);
+        this.names.addAll(Arrays.asList(names));
+
+        return this;
     }
 
     public String getName() {
-        return name;
+        return names.get(0);
+    }
+
+    public List<String> getNames() {
+        return Collections.unmodifiableList(names);
     }
 
     public ParameterType getType() {
@@ -46,4 +66,17 @@ public class Parameter {
     public Object getDefaultValue() {
         return defaultValue;
     }
+
+    public boolean getBooleanDefaultValue() {
+        return (boolean) defaultValue;
+    }
+
+    public String getStringDefaultValue() {
+        return (String) defaultValue;
+    }
+
+    public List<String> getStringListDefaultValue() {
+        return (List<String>) defaultValue;
+    }
+
 }

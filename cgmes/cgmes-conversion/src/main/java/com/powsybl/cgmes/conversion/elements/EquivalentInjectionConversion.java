@@ -7,18 +7,19 @@
 
 package com.powsybl.cgmes.conversion.elements;
 
-import com.powsybl.cgmes.conversion.Conversion;
+import com.powsybl.cgmes.conversion.Context;
 import com.powsybl.cgmes.model.PowerFlow;
 import com.powsybl.iidm.network.EnergySource;
 import com.powsybl.iidm.network.Generator;
+import com.powsybl.iidm.network.GeneratorAdder;
 import com.powsybl.triplestore.api.PropertyBag;
 
 /**
  * @author Luma Zamarreño <zamarrenolm at aia.es>
  */
-public class EquivalentInjectionConversion extends AbstractConductingEquipmentConversion {
+public class EquivalentInjectionConversion extends AbstractReactiveLimitsOwnerConversion {
 
-    public EquivalentInjectionConversion(PropertyBag sm, Conversion.Context context) {
+    public EquivalentInjectionConversion(PropertyBag sm, Context context) {
         super("EquivalentInjection", sm, context);
     }
 
@@ -48,12 +49,7 @@ public class EquivalentInjectionConversion extends AbstractConductingEquipmentCo
             }
         }
 
-        Generator g = voltageLevel().newGenerator()
-                .setId(iidmId())
-                .setName(iidmName())
-                .setEnsureIdUnicity(false)
-                .setBus(terminalConnected() ? busId() : null)
-                .setConnectableBus(busId())
+        GeneratorAdder adder = voltageLevel().newGenerator()
                 .setMinP(minP)
                 .setMaxP(maxP)
                 .setVoltageRegulatorOn(regulationStatus)
@@ -61,11 +57,12 @@ public class EquivalentInjectionConversion extends AbstractConductingEquipmentCo
                 .setTargetP(targetP)
                 .setTargetQ(targetQ)
                 .setTargetV(targetV)
-                .setEnergySource(energySource)
                 // .setRatedS(ratedS)
-                .add();
-
+                .setEnergySource(energySource);
+        identify(adder);
+        connect(adder);
+        Generator g = adder.add();
         convertedTerminals(g.getTerminal());
-        ReactiveLimitsConversion.convert(p, g);
+        convertReactiveLimits(g);
     }
 }

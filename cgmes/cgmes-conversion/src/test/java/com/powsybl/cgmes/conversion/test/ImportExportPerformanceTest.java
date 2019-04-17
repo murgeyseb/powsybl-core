@@ -7,18 +7,6 @@
 
 package com.powsybl.cgmes.conversion.test;
 
-import java.io.IOException;
-import java.nio.file.FileSystem;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Properties;
-
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.common.jimfs.Jimfs;
 import com.powsybl.cgmes.conversion.CgmesExport;
 import com.powsybl.cgmes.conversion.CgmesImport;
@@ -26,11 +14,23 @@ import com.powsybl.cgmes.conversion.CgmesModelExtension;
 import com.powsybl.cgmes.model.CgmesModel;
 import com.powsybl.cgmes.model.test.TestGridModel;
 import com.powsybl.cgmes.model.test.cim14.Cim14SmallCasesCatalog;
+import com.powsybl.commons.config.InMemoryPlatformConfig;
 import com.powsybl.commons.datasource.DataSource;
 import com.powsybl.commons.datasource.FileDataSource;
 import com.powsybl.commons.datasource.ReadOnlyDataSource;
 import com.powsybl.iidm.network.Network;
 import com.powsybl.triplestore.api.TripleStoreFactory;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.FileSystem;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Properties;
 
 /**
  * @author Luma Zamarreño <zamarrenolm at aia.es>
@@ -46,12 +46,12 @@ public class ImportExportPerformanceTest {
 
     @Test
     public void smallcase1() throws IOException {
-        importExport(TripleStoreFactory.allImplementations(), catalog.small1());
+        importExport(TripleStoreFactory.onlyDefaultImplementation(), catalog.small1());
     }
 
     private void importExport(List<String> tsImpls, TestGridModel gm) throws IOException {
         try (FileSystem fs = Jimfs.newFileSystem()) {
-            ReadOnlyDataSource ds = gm.dataSourceBasedOn(fs);
+            ReadOnlyDataSource ds = gm.dataSource();
 
             int size = tsImpls.size();
             long[] startTimes = new long[size];
@@ -73,7 +73,7 @@ public class ImportExportPerformanceTest {
     }
 
     private void importExport(String ts, ReadOnlyDataSource ds, FileSystem fs) throws IOException {
-        CgmesImport i = new CgmesImport();
+        CgmesImport i = new CgmesImport(new InMemoryPlatformConfig(fs));
         Properties importParameters = new Properties();
         importParameters.put("powsyblTripleStore", ts);
         importParameters.put("storeCgmesModelAsNetworkExtension", "true");

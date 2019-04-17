@@ -93,9 +93,7 @@ public interface Bus extends Identifiable<Bus> {
     /**
      * Get 2 windings transformer connected to the bus.
      */
-    default Iterable<TwoWindingsTransformer> getTwoWindingsTransformers() {
-        return getTwoWindingTransformers();
-    }
+    Iterable<TwoWindingsTransformer> getTwoWindingsTransformers();
 
     /**
      * Get 2 windings transformer connected to the bus.
@@ -103,15 +101,13 @@ public interface Bus extends Identifiable<Bus> {
      */
     @Deprecated
     default Iterable<TwoWindingsTransformer> getTwoWindingTransformers() {
-        throw new UnsupportedOperationException("deprecated");
+        return getTwoWindingsTransformers();
     }
 
     /**
      * Get 2 windings transformer connected to the bus.
      */
-    default Stream<TwoWindingsTransformer> getTwoWindingsTransformerStream() {
-        return getTwoWindingTransformerStream();
-    }
+    Stream<TwoWindingsTransformer> getTwoWindingsTransformerStream();
 
     /**
      * Get 2 windings transformer connected to the bus.
@@ -119,15 +115,13 @@ public interface Bus extends Identifiable<Bus> {
      */
     @Deprecated
     default Stream<TwoWindingsTransformer> getTwoWindingTransformerStream() {
-        throw new UnsupportedOperationException("deprecated");
+        return getTwoWindingsTransformerStream();
     }
 
     /**
      * Get 3 windings transformers connected to the bus.
      */
-    default Iterable<ThreeWindingsTransformer> getThreeWindingsTransformers() {
-        return getThreeWindingTransformers();
-    }
+    Iterable<ThreeWindingsTransformer> getThreeWindingsTransformers();
 
     /**
      * Get 3 windings transformers connected to the bus.
@@ -135,15 +129,13 @@ public interface Bus extends Identifiable<Bus> {
      */
     @Deprecated
     default Iterable<ThreeWindingsTransformer> getThreeWindingTransformers() {
-        throw new UnsupportedOperationException("deprecated");
+        return getThreeWindingsTransformers();
     }
 
     /**
      * Get 3 windings transformers connected to the bus.
      */
-    default Stream<ThreeWindingsTransformer> getThreeWindingsTransformerStream() {
-        return getThreeWindingTransformerStream();
-    }
+    Stream<ThreeWindingsTransformer> getThreeWindingsTransformerStream();
 
     /**
      * Get 3 windings transformers connected to the bus.
@@ -151,7 +143,7 @@ public interface Bus extends Identifiable<Bus> {
      */
     @Deprecated
     default Stream<ThreeWindingsTransformer> getThreeWindingTransformerStream() {
-        throw new UnsupportedOperationException("deprecated");
+        return getThreeWindingsTransformerStream();
     }
 
     /**
@@ -163,6 +155,16 @@ public interface Bus extends Identifiable<Bus> {
      * Get generators connected to the bus.
      */
     Stream<Generator> getGeneratorStream();
+
+    /**
+     * Get batteries connected to the bus.
+     */
+    Iterable<Battery> getBatteries();
+
+    /**
+     * Get batteries connected to the bus.
+     */
+    Stream<Battery> getBatteryStream();
 
     /**
      * Get loads connected to the bus.
@@ -179,7 +181,7 @@ public interface Bus extends Identifiable<Bus> {
      */
     @Deprecated
     default Iterable<ShuntCompensator> getShunts() {
-        throw new UnsupportedOperationException("deprecated");
+        return getShuntCompensators();
     }
 
     /**
@@ -187,22 +189,18 @@ public interface Bus extends Identifiable<Bus> {
      */
     @Deprecated
     default Stream<ShuntCompensator> getShuntStream() {
-        throw new UnsupportedOperationException("deprecated");
+        return getShuntCompensatorStream();
     }
 
     /**
      * Get shunt compensators connected to the bus.
      */
-    default Iterable<ShuntCompensator> getShuntCompensators() {
-        throw new UnsupportedOperationException("Not Implemented");
-    }
+    Iterable<ShuntCompensator> getShuntCompensators();
 
     /**
      * Get shunt compensators connected to the bus.
      */
-    default Stream<ShuntCompensator> getShuntCompensatorStream() {
-        throw new UnsupportedOperationException("Not Implemented");
-    }
+    Stream<ShuntCompensator> getShuntCompensatorStream();
 
     /**
      * Get dangling lines connected to the bus.

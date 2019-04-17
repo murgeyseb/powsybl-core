@@ -7,12 +7,12 @@
 package com.powsybl.iidm.network.impl;
 
 import com.google.common.collect.FluentIterable;
+import com.google.common.collect.Lists;
+import com.google.common.primitives.Ints;
 import com.powsybl.iidm.network.*;
 import com.powsybl.iidm.network.impl.util.Ref;
 
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -114,9 +114,8 @@ class SubstationImpl extends AbstractIdentifiable<Substation> implements Substat
 
     @Override
     public int getTwoWindingsTransformerCount() {
-        return voltageLevels.stream()
-                .mapToInt(vl -> vl.getConnectableCount(TwoWindingsTransformer.class))
-                .sum();
+        return Ints.checkedCast(getTwoWindingsTransformerStream()
+                .count());
     }
 
     @Override
@@ -138,9 +137,8 @@ class SubstationImpl extends AbstractIdentifiable<Substation> implements Substat
 
     @Override
     public int getThreeWindingsTransformerCount() {
-        return voltageLevels.stream()
-                .mapToInt(vl -> vl.getConnectableCount(ThreeWindingsTransformer.class))
-                .sum();
+        return Ints.checkedCast(getThreeWindingsTransformerStream()
+                .count());
     }
 
     @Override
@@ -162,4 +160,38 @@ class SubstationImpl extends AbstractIdentifiable<Substation> implements Substat
         return "Substation";
     }
 
+    @Override
+    public void remove() {
+        Substations.checkRemovability(this);
+
+        Set<VoltageLevelExt> vls = new HashSet<>(voltageLevels);
+        for (VoltageLevelExt vl : vls) {
+            // Remove all branches, transformers and HVDC lines
+            List<Connectable> connectables = Lists.newArrayList(vl.getConnectables());
+            for (Connectable connectable : connectables) {
+                ConnectableType type = connectable.getType();
+                if (VoltageLevels.MULTIPLE_TERMINALS_CONNECTABLE_TYPES.contains(type)) {
+                    connectable.remove();
+                } else if (type == ConnectableType.HVDC_CONVERTER_STATION) {
+                    HvdcLine hvdcLine = getNetwork().getHvdcLine((HvdcConverterStation) connectable);
+                    if (hvdcLine != null) {
+                        hvdcLine.remove();
+                    }
+                }
+            }
+
+            // Then remove the voltage level (bus, switches and injections) from the network
+            vl.remove();
+        }
+
+        // Remove this substation from the network
+        getNetwork().getIndex().remove(this);
+
+        getNetwork().getListeners().notifyRemoval(this);
+    }
+
+    void remove(VoltageLevelExt voltageLevelExt) {
+        Objects.requireNonNull(voltageLevelExt);
+        voltageLevels.remove(voltageLevelExt);
+    }
 }

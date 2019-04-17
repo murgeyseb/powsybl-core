@@ -7,13 +7,12 @@
 
 package com.powsybl.cgmes.conversion.test.network.compare;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.powsybl.cgmes.model.CgmesNames;
 import com.powsybl.iidm.network.Bus;
 import com.powsybl.iidm.network.CurrentLimits;
 import com.powsybl.iidm.network.DanglingLine;
@@ -167,8 +166,8 @@ public class Comparison {
 
     private void compareBuses(Bus expected, Bus actual) {
         equivalent("VoltageLevel", expected.getVoltageLevel(), actual.getVoltageLevel());
-        compare("v", expected.getV(), actual.getV());
-        compare("angle", expected.getAngle(), actual.getAngle());
+        compare(CgmesNames.VOLTAGE, expected.getV(), actual.getV());
+        compare(CgmesNames.ANGLE, expected.getAngle(), actual.getAngle());
     }
 
     private void compareLoads(Load expected, Load actual) {
@@ -373,7 +372,7 @@ public class Comparison {
                 return;
             }
             compare("permanentLimit", expected.getPermanentLimit(), actual.getPermanentLimit());
-            // TODO Check also temporary limits
+            compareTemporaryLimits(bactual, expected.getTemporaryLimits(), actual.getTemporaryLimits());
         }
     }
 
@@ -511,6 +510,22 @@ public class Comparison {
                     actual1.substring(0, endIndex));
         } else {
             compare(context, expected1, actual1);
+        }
+    }
+
+    private void compareTemporaryLimits(Identifiable bactual,
+                                        Collection<CurrentLimits.TemporaryLimit> expected,
+                                        Collection<CurrentLimits.TemporaryLimit> actual) {
+        if (expected.size() != actual.size()) {
+            diff.unexpected(bactual);
+            return;
+        }
+        Iterator<CurrentLimits.TemporaryLimit> actualIt = actual.iterator();
+        for (CurrentLimits.TemporaryLimit e : expected) {
+            CurrentLimits.TemporaryLimit a = actualIt.next();
+            diff.compare("temporaryLimit", e.getName(), a.getName());
+            diff.compare("temporaryLimit", e.getAcceptableDuration(), a.getAcceptableDuration());
+            diff.compare("temporaryLimit", e.getValue(), a.getValue());
         }
     }
 

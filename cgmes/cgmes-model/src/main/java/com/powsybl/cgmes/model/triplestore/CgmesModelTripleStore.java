@@ -8,7 +8,6 @@
 package com.powsybl.cgmes.model.triplestore;
 
 import java.io.InputStream;
-
 import java.io.PrintStream;
 import java.util.Objects;
 import java.util.Set;
@@ -20,6 +19,8 @@ import org.slf4j.LoggerFactory;
 
 import com.powsybl.cgmes.model.AbstractCgmesModel;
 import com.powsybl.cgmes.model.CgmesModelException;
+import com.powsybl.cgmes.model.CgmesNames;
+import com.powsybl.cgmes.model.CgmesNamespace;
 import com.powsybl.cgmes.model.Subset;
 import com.powsybl.commons.datasource.DataSource;
 import com.powsybl.triplestore.api.PropertyBag;
@@ -37,6 +38,7 @@ public class CgmesModelTripleStore extends AbstractCgmesModel {
         this.cimNamespace = cimNamespace;
         this.tripleStore = tripleStore;
         tripleStore.defineQueryPrefix("cim", cimNamespace);
+        tripleStore.defineQueryPrefix("entsoe", CgmesNamespace.ENTSOE_NAMESPACE);
         queryCatalog = queryCatalogFor(cimNamespace);
         Objects.requireNonNull(queryCatalog);
     }
@@ -67,16 +69,71 @@ public class CgmesModelTripleStore extends AbstractCgmesModel {
     // Queries
 
     @Override
-    public boolean isNodeBreaker() {
-        // Optimization hint: consider caching the results of the query for model
-        // profiles
-        if (queryCatalog.containsKey("modelProfiles")) {
-            PropertyBags r = namedQuery("modelProfiles");
+    public boolean hasEquipmentCore() {
+        if (queryCatalog.containsKey(MODEL_PROFILES)) {
+            PropertyBags r = namedQuery(MODEL_PROFILES);
             if (r == null) {
                 return false;
             }
             for (PropertyBag m : r) {
-                String p = m.get("profile");
+                String p = m.get(PROFILE);
+                if (p != null && p.contains("/EquipmentCore/")) {
+                    if (LOG.isInfoEnabled()) {
+                        LOG.info("Model contains Equipment Core data profile in model {}",
+                            m.get(CgmesNames.FULL_MODEL));
+                    }
+                    return true;
+                }
+            }
+            return false; // If we have a query for model profiles but none of the profiles contains "EquipmentCore", equipment core is not available
+        }
+        // If we do not have a query for model profiles we assume equipment core is
+        // available
+        // (This covers the case for CIM14 files)
+        return true;
+    }
+
+    @Override
+    public boolean hasBoundary() {
+        // The Model has boundary if we are able to find models
+        // that have EquipmentBoundary profile
+        // and models that have TopologyBoundary profile
+        boolean hasEquipmentBoundary = false;
+        boolean hasTopologyBoundary = false;
+        if (queryCatalog.containsKey(MODEL_PROFILES)) {
+            PropertyBags r = namedQuery(MODEL_PROFILES);
+            if (r == null) {
+                return false;
+            }
+            for (PropertyBag m : r) {
+                String p = m.get(PROFILE);
+                String mid = m.get(CgmesNames.FULL_MODEL);
+                if (p != null && p.contains("/EquipmentBoundary/")) {
+                    LOG.info("Model contains EquipmentBoundary data in model {}", mid);
+                    hasEquipmentBoundary = true;
+                }
+                if (p != null && p.contains("/TopologyBoundary/")) {
+                    LOG.info("Model contains TopologyBoundary data in model {}", mid);
+                    hasTopologyBoundary = true;
+                }
+            }
+        }
+        // If we do not have a query for model profiles we assume no boundary exist
+        // (Maybe for CIM14 data sources we should rely on file names ?)
+        return hasEquipmentBoundary && hasTopologyBoundary;
+    }
+
+    @Override
+    public boolean isNodeBreaker() {
+        // Optimization hint: consider caching the results of the query for model
+        // profiles
+        if (queryCatalog.containsKey(MODEL_PROFILES)) {
+            PropertyBags r = namedQuery(MODEL_PROFILES);
+            if (r == null) {
+                return false;
+            }
+            for (PropertyBag m : r) {
+                String p = m.get(PROFILE);
                 if (p != null && p.contains("/EquipmentOperation/")) {
                     if (LOG.isInfoEnabled()) {
                         LOG.info("Model is considered node-breaker because {} has profile {}", m.get("FullModel"), p);
@@ -186,21 +243,6 @@ public class CgmesModelTripleStore extends AbstractCgmesModel {
     }
 
     @Override
-    public PropertyBags terminalsTP() {
-        return namedQuery("terminalsTP");
-    }
-
-    @Override
-    public PropertyBags terminalsCN() {
-        return namedQuery("terminalsCN");
-    }
-
-    @Override
-    public PropertyBags terminalLimits() {
-        return namedQuery("terminalLimits");
-    }
-
-    @Override
     public PropertyBags connectivityNodes() {
         return namedQuery("connectivityNodes");
     }
@@ -208,6 +250,21 @@ public class CgmesModelTripleStore extends AbstractCgmesModel {
     @Override
     public PropertyBags topologicalNodes() {
         return namedQuery("topologicalNodes");
+    }
+
+    @Override
+    public PropertyBags connectivityNodeContainers() {
+        return namedQuery("connectivityNodeContainers");
+    }
+
+    @Override
+    public PropertyBags operationalLimits() {
+        return namedQuery("operationalLimits");
+    }
+
+    @Override
+    public PropertyBags busBarSections() {
+        return namedQuery("busbarSections");
     }
 
     @Override
@@ -297,6 +354,22 @@ public class CgmesModelTripleStore extends AbstractCgmesModel {
     }
 
     @Override
+    public PropertyBags reactiveCapabilityCurveData() {
+        return namedQuery("reactiveCapabilityCurveData");
+    }
+
+    @Override
+    public PropertyBags ratioTapChangerTablesPoints() {
+        return namedQuery("ratioTapChangerTablesPoints");
+    }
+
+    @Override
+    public PropertyBags ratioTapChangerTable(String tableId) {
+        Objects.requireNonNull(tableId);
+        return namedQuery("ratioTapChangerTable", tableId);
+    }
+
+    @Override
     public PropertyBags phaseTapChangerTable(String tableId) {
         Objects.requireNonNull(tableId);
         return namedQuery("phaseTapChangerTable", tableId);
@@ -345,6 +418,7 @@ public class CgmesModelTripleStore extends AbstractCgmesModel {
         return tripleStore.query(queryText);
     }
 
+    @Override
     public TripleStore tripleStore() {
         return tripleStore;
     }
@@ -405,5 +479,7 @@ public class CgmesModelTripleStore extends AbstractCgmesModel {
     private final TripleStore tripleStore;
     private final QueryCatalog queryCatalog;
 
+    private static final String MODEL_PROFILES = "modelProfiles";
+    private static final String PROFILE = "profile";
     private static final Logger LOG = LoggerFactory.getLogger(CgmesModelTripleStore.class);
 }

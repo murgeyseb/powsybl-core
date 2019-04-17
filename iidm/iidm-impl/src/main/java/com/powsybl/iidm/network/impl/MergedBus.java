@@ -219,28 +219,10 @@ class MergedBus extends AbstractIdentifiable<Bus> implements CalculatedBus {
         return Iterables.concat(iterables);
     }
 
-    /**
-     * @deprecated Use {@link #getTwoWindingsTransformers()} instead.
-     */
-    @Deprecated
-    @Override
-    public Iterable<TwoWindingsTransformer> getTwoWindingTransformers() {
-        return getTwoWindingsTransformers();
-    }
-
     @Override
     public Stream<TwoWindingsTransformer> getTwoWindingsTransformerStream() {
         checkValidity();
         return buses.stream().flatMap(ConfiguredBus::getTwoWindingsTransformerStream);
-    }
-
-    /**
-     * @deprecated Use {@link #getTwoWindingsTransformerStream()} instead.
-     */
-    @Deprecated
-    @Override
-    public Stream<TwoWindingsTransformer> getTwoWindingTransformerStream() {
-        return getTwoWindingsTransformerStream();
     }
 
     @Override
@@ -253,28 +235,10 @@ class MergedBus extends AbstractIdentifiable<Bus> implements CalculatedBus {
         return Iterables.concat(iterables);
     }
 
-    /**
-     * @deprecated Use {@link #getThreeWindingsTransformers()} instead.
-     */
-    @Deprecated
-    @Override
-    public Iterable<ThreeWindingsTransformer> getThreeWindingTransformers() {
-        return getThreeWindingsTransformers();
-    }
-
     @Override
     public Stream<ThreeWindingsTransformer> getThreeWindingsTransformerStream() {
         checkValidity();
         return buses.stream().flatMap(ConfiguredBus::getThreeWindingsTransformerStream);
-    }
-
-    /**
-     * @deprecated Use {@link #getThreeWindingsTransformerStream()} instead.
-     */
-    @Deprecated
-    @Override
-    public Stream<ThreeWindingsTransformer> getThreeWindingTransformerStream() {
-        return getThreeWindingsTransformerStream();
     }
 
     @Override
@@ -294,6 +258,22 @@ class MergedBus extends AbstractIdentifiable<Bus> implements CalculatedBus {
     }
 
     @Override
+    public Iterable<Battery> getBatteries() {
+        checkValidity();
+        List<Iterable<Battery>> iterables = new ArrayList<>(buses.size());
+        for (ConfiguredBus bus : buses) {
+            iterables.add(bus.getBatteries());
+        }
+        return Iterables.concat(iterables);
+    }
+
+    @Override
+    public Stream<Battery> getBatteryStream() {
+        checkValidity();
+        return buses.stream().flatMap(ConfiguredBus::getBatteryStream);
+    }
+
+    @Override
     public Iterable<Load> getLoads() {
         checkValidity();
         List<Iterable<Load>> iterables = new ArrayList<>(buses.size());
@@ -307,24 +287,6 @@ class MergedBus extends AbstractIdentifiable<Bus> implements CalculatedBus {
     public Stream<Load> getLoadStream() {
         checkValidity();
         return buses.stream().flatMap(ConfiguredBus::getLoadStream);
-    }
-
-    /**
-     * @deprecated Use {@link #getShuntCompensators()} instead.
-     */
-    @Override
-    @Deprecated
-    public Iterable<ShuntCompensator> getShunts() {
-        return getShuntCompensators();
-    }
-
-    /**
-     * @deprecated Use {@link #getShuntCompensatorStream()} instead.
-     */
-    @Override
-    @Deprecated
-    public Stream<ShuntCompensator> getShuntStream() {
-        return getShuntCompensatorStream();
     }
 
     @Override

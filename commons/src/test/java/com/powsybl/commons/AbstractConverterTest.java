@@ -9,6 +9,8 @@ package com.powsybl.commons;
 import com.google.common.io.ByteStreams;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
+import com.powsybl.commons.config.InMemoryPlatformConfig;
+import com.powsybl.commons.config.PlatformConfig;
 import org.junit.After;
 import org.junit.Before;
 import org.xmlunit.builder.DiffBuilder;
@@ -35,11 +37,13 @@ public abstract class AbstractConverterTest {
 
     protected FileSystem fileSystem;
     protected Path tmpDir;
+    protected PlatformConfig platformConfig;
 
     @Before
     public void setUp() throws IOException {
         fileSystem = Jimfs.newFileSystem(Configuration.unix());
         tmpDir = Files.createDirectory(fileSystem.getPath("tmp"));
+        platformConfig = new InMemoryPlatformConfig(fileSystem);
     }
 
     @After
@@ -65,8 +69,16 @@ public abstract class AbstractConverterTest {
 
     protected static void compareTxt(InputStream expected, InputStream actual) {
         try {
+            compareTxt(expected, new String(ByteStreams.toByteArray(actual), StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    protected static void compareTxt(InputStream expected, String actual) {
+        try {
             String expectedStr = normalizeLineSeparator(new String(ByteStreams.toByteArray(expected), StandardCharsets.UTF_8));
-            String actualStr = normalizeLineSeparator(new String(ByteStreams.toByteArray(actual), StandardCharsets.UTF_8));
+            String actualStr = normalizeLineSeparator(actual);
             assertEquals(expectedStr, actualStr);
         } catch (IOException e) {
             throw new UncheckedIOException(e);

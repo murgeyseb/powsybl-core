@@ -7,7 +7,7 @@
 
 package com.powsybl.cgmes.conversion.elements;
 
-import com.powsybl.cgmes.conversion.Conversion;
+import com.powsybl.cgmes.conversion.Context;
 import com.powsybl.cgmes.conversion.CountryConversion;
 import com.powsybl.iidm.network.Country;
 import com.powsybl.iidm.network.Substation;
@@ -18,7 +18,7 @@ import com.powsybl.triplestore.api.PropertyBag;
  */
 public class SubstationConversion extends AbstractIdentifiedObjectConversion {
 
-    public SubstationConversion(PropertyBag s, Conversion.Context context) {
+    public SubstationConversion(PropertyBag s, Context context) {
         super("Substation", s, context);
     }
 
@@ -35,8 +35,8 @@ public class SubstationConversion extends AbstractIdentifiedObjectConversion {
         String regionName = p.get("regionName");
 
         Country country = CountryConversion.fromRegionName(regionName)
-                .orElse(CountryConversion.fromSubregionName(subRegionName)
-                        .orElse(CountryConversion.defaultCountry()));
+                .orElseGet(() -> CountryConversion.fromSubregionName(subRegionName)
+                        .orElseGet(() -> CountryConversion.defaultCountry(this)));
         String geo = subRegion;
 
         // TODO add naminStrategy (for regions and substations)
