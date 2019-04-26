@@ -10,7 +10,7 @@ import static org.junit.Assert.*;
 public class GraphUtilTest {
 
     @Test
-    public void removeIsolatedVertices() throws Exception {
+    public void removeIsolatedVertices() {
         UndirectedGraph<Object, Object> graph = new UndirectedGraphImpl<>();
 
         graph.addVertex();
@@ -27,6 +27,23 @@ public class GraphUtilTest {
         // Now vertex 0 must be removed.
         GraphUtil.removeIsolatedVertices(graph);
         assertEquals(2, graph.getVertexCount());
+    }
+
+    @Test
+    public void vertexCountTest() {
+        UndirectedGraph<Object, Object> graph = new UndirectedGraphImpl<>();
+        assertEquals(0, graph.getVertexCount());
+
+        graph.addVertex(2);
+        assertEquals(0, graph.addVertex());
+        assertEquals(1, graph.addVertex());
+        assertEquals(3, graph.getVertexCount());
+
+        graph.addEdge(0, 2, null);
+
+        GraphUtil.removeIsolatedVertices(graph);
+        assertEquals(2, graph.getVertexCount());
+        assertArrayEquals(graph.getVertices(), new int[]{0, 2});
     }
 
 }

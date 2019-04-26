@@ -115,14 +115,35 @@ public class UndirectedGraphImpl<V, E> implements UndirectedGraph<V, E> {
         }
     }
 
+    private void ensureCapacity(int capacity) {
+        for (int i = vertices.size(); i <= capacity; ++i) {
+            vertices.add(null);
+            removedVertices.add(i);
+        }
+    }
+
+    @Override
+    public void addVertex(int v) {
+        if (v < 0) {
+            throw new PowsyblException("Invalid vertex index: " + v);
+        }
+
+        ensureCapacity(v + 1);
+        if (vertices.get(v) == null) {
+            vertices.set(v, new Vertex<>());
+            removedVertices.remove(v);
+        }
+    }
+
     @Override
     public int addVertex() {
         int v;
         if (removedVertices.isEmpty()) {
             v = vertices.size();
-            vertices.add(new Vertex<V>());
+            vertices.add(new Vertex<>());
         } else {
             v = removedVertices.removeAt(0);
+            vertices.set(v, new Vertex<>());
         }
         invalidateAdjacencyList();
         notifyListener();

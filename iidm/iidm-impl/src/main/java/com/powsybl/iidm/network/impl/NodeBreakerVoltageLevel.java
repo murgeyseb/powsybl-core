@@ -200,6 +200,8 @@ class NodeBreakerVoltageLevel extends AbstractVoltageLevel {
             }
             SwitchImpl aSwitch = new SwitchImpl(NodeBreakerVoltageLevel.this, id, getName(), kind, open, retained, fictitious);
             getNetwork().getIndex().checkAndAdd(aSwitch);
+            graph.addVertex(node1);
+            graph.addVertex(node2);
             int e = graph.addEdge(node1, node2, aSwitch);
             switches.put(id, e);
             invalidateCache();
@@ -249,6 +251,8 @@ class NodeBreakerVoltageLevel extends AbstractVoltageLevel {
                 throw new ValidationException(this, "second connection node is not set");
             }
 
+            graph.addVertex(node1);
+            graph.addVertex(node2);
             graph.addEdge(node1, node2, null);
             invalidateCache();
         }
@@ -909,6 +913,10 @@ class NodeBreakerVoltageLevel extends AbstractVoltageLevel {
             return;
         }
         int node = ((NodeTerminal) terminal).getNode();
+
+        // Ensure that the vertex exists
+        graph.addVertex(node);
+
         if (graph.getVertexObject(node) != null) {
             throw new ValidationException(terminal.getConnectable(),
                     "an equipment (" + graph.getVertexObject(node).getConnectable().getId()

@@ -21,6 +21,8 @@ public interface UndirectedGraph<V, E> {
 
     int addVertex();
 
+    void addVertex(int v);
+
     V removeVertex(int v);
 
     int getVertexCount();
