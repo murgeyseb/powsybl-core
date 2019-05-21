@@ -218,6 +218,7 @@ class BusBreakerVoltageLevel extends AbstractVoltageLevel {
                     case DANGLING_LINE:
                     case LOAD:
                     case GENERATOR:
+                    case BATTERY:
                     case SHUNT_COMPENSATOR:
                     case STATIC_VAR_COMPENSATOR:
                         feederCount++;
@@ -241,7 +242,7 @@ class BusBreakerVoltageLevel extends AbstractVoltageLevel {
             // mapping between configured buses and merged buses
             Map<ConfiguredBus, MergedBus> mapping = new IdentityHashMap<>();
 
-            boolean[] encountered = new boolean[graph.getMaxVertex()];
+            boolean[] encountered = new boolean[graph.getVertexCapacity()];
             Arrays.fill(encountered, false);
             int busNum = 0;
             for (int v : graph.getVertices()) {

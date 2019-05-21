@@ -43,6 +43,7 @@ public class Context {
         tapChangerTransformers = new TapChangerTransformers();
         dcMapping = new DcMapping(this);
         currentLimitsMapping = new CurrentLimitsMapping(this);
+        regulatingControlMapping = new RegulatingControlMapping(this);
         nodeMapping = new NodeMapping();
 
         ratioTapChangerTables = new HashMap<>();
@@ -95,6 +96,10 @@ public class Context {
 
     public CurrentLimitsMapping currentLimitsMapping() {
         return currentLimitsMapping;
+    }
+
+    public RegulatingControlMapping regulatingControlMapping() {
+        return regulatingControlMapping;
     }
 
     public static String boundaryVoltageLevelId(String nodeId) {
@@ -198,6 +203,7 @@ public class Context {
     private final TapChangerTransformers tapChangerTransformers;
     private final DcMapping dcMapping;
     private final CurrentLimitsMapping currentLimitsMapping;
+    private final RegulatingControlMapping regulatingControlMapping;
 
     private final Map<String, PropertyBags> ratioTapChangerTables;
     private final Map<String, PropertyBags> reactiveCapabilityCurveData;

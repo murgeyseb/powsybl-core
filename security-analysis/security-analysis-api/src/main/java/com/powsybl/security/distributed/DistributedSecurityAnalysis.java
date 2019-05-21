@@ -12,25 +12,26 @@ import com.powsybl.contingency.Contingency;
 import com.powsybl.iidm.network.Network;
 import com.powsybl.security.SecurityAnalysisParameters;
 import com.powsybl.security.SecurityAnalysisResult;
-import com.powsybl.security.SecurityAnalysisResultMerger;
-import com.powsybl.security.json.SecurityAnalysisResultDeserializer;
+import com.powsybl.security.SecurityAnalysisResultWithLog;
+import com.powsybl.security.execution.SecurityAnalysisExecutionInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-
-import static com.powsybl.tools.ToolConstants.TASK;
 
 /**
  * Security analysis implementation which distributes the work through X
  * executions of the "itools security-analysis" command.
  *
+ * @deprecated Use instead {@link DistributedSecurityAnalysisExecution}, which clarifies the input data for that kind
+ *             of execution, and tries to differentiate more between a {@link com.powsybl.security.SecurityAnalysis}
+ *             and its mode of execution.
+ *
  * @author Sylvain Leclerc <sylvain.leclerc at rte-france.com>
  */
+@Deprecated
 public class DistributedSecurityAnalysis extends ExternalSecurityAnalysis {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DistributedSecurityAnalysis.class);
@@ -41,60 +42,30 @@ public class DistributedSecurityAnalysis extends ExternalSecurityAnalysis {
     }
 
     @Override
-    public CompletableFuture<SecurityAnalysisResult> run(String workingStateId, SecurityAnalysisParameters parameters, ContingenciesProvider contingenciesProvider) {
+    public CompletableFuture<SecurityAnalysisResult> run(String workingVariantId, SecurityAnalysisParameters parameters, ContingenciesProvider contingenciesProvider) {
         LOGGER.debug("Starting distributed security analysis.");
 
         ExecutionEnvironment itoolsEnv = new ExecutionEnvironment(Collections.emptyMap(), "security_analysis_task_", config.isDebug());
 
+        SecurityAnalysisExecutionInput input = buildInput(workingVariantId, parameters, contingenciesProvider);
+
         List<Contingency> contingencies = contingenciesProvider.getContingencies(network);
         int actualTaskCount = Math.min(taskCount, Math.max(1, contingencies.size()));
-        return computationManager.execute(itoolsEnv, new SubTaskHandler(workingStateId, parameters, contingenciesProvider, actualTaskCount));
+        return computationManager.execute(itoolsEnv,
+                SecurityAnalysisExecutionHandlers.distributed(input, actualTaskCount));
     }
 
-    /**
-     * Execution handler for sub-tasks.
-     * Extends the base handler to launch one itools command for each subtask.
-     * Finally, reads and merge results.
-     */
-    private class SubTaskHandler extends SecurityAnalysisExecutionHandler {
+    @Override
+    public CompletableFuture<SecurityAnalysisResultWithLog> runWithLog(String workingVariantId, SecurityAnalysisParameters parameters, ContingenciesProvider contingenciesProvider) {
+        LOGGER.debug("Starting distributed security analysis(with log).");
 
-        private final int actualTaskCount;
+        ExecutionEnvironment itoolsEnv = new ExecutionEnvironment(Collections.emptyMap(), "security_analysis_task_", config.isDebug());
 
-        SubTaskHandler(String workingStateId, SecurityAnalysisParameters parameters, ContingenciesProvider contingenciesProvider, int actualTaskCount) {
-            super(workingStateId, parameters, contingenciesProvider);
-            this.actualTaskCount = actualTaskCount;
-        }
+        SecurityAnalysisExecutionInput input = buildInput(workingVariantId, parameters, contingenciesProvider);
 
-        private String getOutputFileName(int taskNumber) {
-            return "task_" + taskNumber + "_result.json";
-        }
-
-        /**
-         * Merges the subtasks result files.
-         */
-        @Override
-        protected SecurityAnalysisResult readResults(Path workingDir) {
-            List<SecurityAnalysisResult> results = new ArrayList<>(actualTaskCount);
-            for (int taskNum = 0; taskNum < actualTaskCount; taskNum++) {
-                Path taskResultFile = workingDir.resolve(getOutputFileName(taskNum));
-                results.add(SecurityAnalysisResultDeserializer.read(taskResultFile));
-            }
-            return SecurityAnalysisResultMerger.merge(results);
-        }
-
-        /**
-         *  Command execution which requests one command execution for each subset of contingencies.
-         *  The input files are the same for all commands, but the "task" parameters and the
-         *  output files are different.
-         */
-        @Override
-        protected List<CommandExecution> buildCommandExecution() {
-            SimpleCommand cmd = baseCommand("security-analysis-task")
-                    .option(TASK, i -> new Partition(i + 1, actualTaskCount).toString())
-                    .option("output-file", this::getOutputFileName)
-                    .option("output-format", "JSON")
-                    .build();
-            return Collections.singletonList(new CommandExecution(cmd, actualTaskCount, 1));
-        }
+        List<Contingency> contingencies = contingenciesProvider.getContingencies(network);
+        int actualTaskCount = Math.min(taskCount, Math.max(1, contingencies.size()));
+        return computationManager.execute(itoolsEnv,
+                SecurityAnalysisExecutionHandlers.distributedWithLog(input, actualTaskCount));
     }
 }
