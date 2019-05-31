@@ -6,8 +6,6 @@
  */
 package com.powsybl.itools;
 
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -21,7 +19,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.Arrays;
@@ -33,7 +30,7 @@ import java.util.stream.Collectors;
  *
  * @author Geoffroy Jamgotchian <geoffroy.jamgotchian at rte-france.com>
  */
-@Mojo(name = "package-zip", requiresDependencyCollection = ResolutionScope.COMPILE_PLUS_RUNTIME, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
+@Mojo(name = "package", requiresDependencyCollection = ResolutionScope.COMPILE_PLUS_RUNTIME, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class ItoolsPackagerMojo extends AbstractMojo {
 
     @Parameter(readonly = true, defaultValue = "${project}")
@@ -78,33 +75,6 @@ public class ItoolsPackagerMojo extends AbstractMojo {
 
     @Parameter
     private CopyTo copyToEtc;
-
-    private static void zip(Path dir, Path baseDir, Path zipFilePath) throws IOException {
-        try (ZipArchiveOutputStream zos = new ZipArchiveOutputStream(Files.newOutputStream(zipFilePath))) {
-            Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    ZipArchiveEntry entry = new ZipArchiveEntry(baseDir.relativize(file).toString());
-                    if (Files.isExecutable(file)) {
-                        entry.setUnixMode(0100770);
-                    } else {
-                        entry.setUnixMode(0100660);
-                    }
-                    zos.putArchiveEntry(entry);
-                    Files.copy(file, zos);
-                    zos.closeArchiveEntry();
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                    zos.putArchiveEntry(new ZipArchiveEntry(baseDir.relativize(dir).toString() + "/"));
-                    zos.closeArchiveEntry();
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        }
-    }
 
     private void copyFiles(CopyTo copyTo, Path destDir) {
         if (copyTo != null) {
@@ -194,9 +164,10 @@ public class ItoolsPackagerMojo extends AbstractMojo {
             Files.createDirectories(libDir);
             copyFiles(copyToLib, libDir);
 
-            getLog().info("Zip package");
+            // create package
             String archiveNameNotNull = archiveName != null ? archiveName : packageNameNotNull;
-            zip(packageDir, targetDir, targetDir.resolve(archiveNameNotNull + ".zip"));
+            new PackageMojo().createPackage(packageDir, targetDir, archiveNameNotNull);
+
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
