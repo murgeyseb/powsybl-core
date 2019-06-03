@@ -312,6 +312,11 @@ public class CgmesModelTripleStore extends AbstractCgmesModel {
     }
 
     @Override
+    public PropertyBags regulatingControls() {
+        return namedQuery("regulatingControls");
+    }
+
+    @Override
     public PropertyBags energyConsumers() {
         return namedQuery("energyConsumers");
     }

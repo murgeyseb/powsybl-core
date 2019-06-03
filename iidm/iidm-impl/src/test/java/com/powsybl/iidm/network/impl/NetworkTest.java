@@ -52,7 +52,7 @@ public class NetworkTest {
         Substation substation1 = network.getSubstation("substation1");
         assertNotNull(substation1);
         assertEquals("substation1", substation1.getId());
-        assertSame(country1, substation1.getCountry());
+        assertSame(country1, substation1.getCountry().orElse(null));
         assertEquals(1, substation1.getGeographicalTags().size());
         assertTrue(substation1.getGeographicalTags().contains("region1"));
         assertEquals(1, Iterables.size(network.getVoltageLevels()));
@@ -138,6 +138,19 @@ public class NetworkTest {
     }
 
     @Test
+    public void testNetwork1WithoutCountry() {
+        Network network = NetworkTest1Factory.create();
+
+        Substation substation1 = network.getSubstation("substation1");
+        substation1.setCountry(null);
+
+        assertEquals(0, Iterables.size(network.getCountries()));
+        assertEquals(0, network.getCountryCount());
+        assertEquals(1, Iterables.size(network.getSubstations("", "TSO1", "region1")));
+        assertFalse(substation1.getCountry().isPresent());
+    }
+
+    @Test
     public void testNetworkWithBattery() {
         Network network = BatteryNetworkFactory.create();
         assertEquals(1, Iterables.size(network.getCountries()));
@@ -156,7 +169,7 @@ public class NetworkTest {
         Substation substation1 = network.getSubstation("P1");
         assertNotNull(substation1);
         assertEquals("P1", substation1.getId());
-        assertSame(country1, substation1.getCountry());
+        assertSame(country1, substation1.getCountry().orElse(null));
         assertEquals(1, substation1.getGeographicalTags().size());
         assertTrue(substation1.getGeographicalTags().contains("A"));
         assertEquals(1, Iterables.size(substation1.getVoltageLevels()));
@@ -187,7 +200,7 @@ public class NetworkTest {
         Substation substation2 = network.getSubstation("P2");
         assertNotNull(substation2);
         assertEquals("P2", substation2.getId());
-        assertSame(country1, substation2.getCountry());
+        assertSame(country1, substation2.getCountry().orElse(null));
         assertEquals(1, substation2.getGeographicalTags().size());
         assertTrue(substation2.getGeographicalTags().contains("B"));
         assertEquals(1, Iterables.size(substation1.getVoltageLevels()));
@@ -214,10 +227,10 @@ public class NetworkTest {
         Battery battery2 = network.getBattery("BAT2");
         assertNotNull(battery2);
         assertEquals("BAT2", battery2.getId());
-        assertEquals(9999.99, battery2.getP0(), 0.0);
-        assertEquals(9999.99, battery2.getQ0(), 0.0);
-        assertEquals(-9999.99, battery2.getMinP(), 0.0);
-        assertEquals(9999.99, battery2.getMaxP(), 0.0);
+        assertEquals(100, battery2.getP0(), 0.0);
+        assertEquals(200, battery2.getQ0(), 0.0);
+        assertEquals(-200, battery2.getMinP(), 0.0);
+        assertEquals(200, battery2.getMaxP(), 0.0);
         assertEquals(bus2.getId(), battery2.getTerminal().getBusBreakerView().getBus().getId());
 
         Load load1 = network.getLoad("LOAD");
@@ -366,7 +379,7 @@ public class NetworkTest {
     @Test
     public void testSetterGetter() {
         String sourceFormat = "test_sourceFormat";
-        Network network = NetworkFactory.create("test", sourceFormat);
+        Network network = Network.create("test", sourceFormat);
         DateTime caseDate = new DateTime();
         network.setCaseDate(caseDate);
         assertEquals(caseDate, network.getCaseDate());
@@ -408,4 +421,24 @@ public class NetworkTest {
         voltageLevel.getNodeBreakerView().getTerminal2("fictitiousSwitchId");
     }
 
+    @Test
+    public void testCreate() {
+        // check default implementation is used
+        Network network = Network.create("test", "test");
+        assertTrue(network instanceof NetworkImpl);
+    }
+
+    @Test
+    public void testWith() {
+        // check default implementation is returned
+        Network network = Network.with("Default").create("test", "test");
+        assertTrue(network instanceof NetworkImpl);
+
+        // check that an exception is thrown if implementation is not found
+        try {
+            Network.with("???").create("test", "test");
+            fail();
+        } catch (PowsyblException ignored) {
+        }
+    }
 }

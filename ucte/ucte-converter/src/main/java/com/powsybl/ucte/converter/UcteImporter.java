@@ -81,7 +81,7 @@ public class UcteImporter implements Importer {
      */
     private static EntsoeGeographicalCode getRegionalGeographicalCode(Substation substation) {
         //Currently only DE has subregions
-        if (substation.getCountry() != Country.DE) {
+        if (substation.getCountry().map(country -> country != Country.DE).orElse(true)) {
             return null;
         }
         EntsoeGeographicalCode res = Enums.getIfPresent(EntsoeGeographicalCode.class, substation.getName().substring(0, 2)).orNull();
@@ -915,7 +915,7 @@ public class UcteImporter implements Importer {
     }
 
     @Override
-    public Network importData(ReadOnlyDataSource dataSource, Properties parameters) {
+    public Network importData(ReadOnlyDataSource dataSource, NetworkFactory networkFactory, Properties parameters) {
         try {
             String ext = findExtension(dataSource, true);
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(dataSource.newInputStream(null, ext)))) {
@@ -927,7 +927,7 @@ public class UcteImporter implements Importer {
 
                 EntsoeFileName ucteFileName = EntsoeFileName.parse(fileName);
 
-                Network network = NetworkFactory.create(fileName, "UCTE");
+                Network network = networkFactory.createNetwork(fileName, "UCTE");
                 network.setCaseDate(ucteFileName.getDate());
                 network.setForecastDistance(ucteFileName.getForecastDistance());
 

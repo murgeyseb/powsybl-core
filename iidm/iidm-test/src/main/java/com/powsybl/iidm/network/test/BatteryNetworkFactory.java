@@ -21,7 +21,7 @@ public final class BatteryNetworkFactory {
     }
 
     public static Network create() {
-        Network network = NetworkFactory.create("fictitious", "test");
+        Network network = Network.create("fictitious", "test");
         network.setCaseDate(DateTime.parse("2017-06-25T17:43:00.000+01:00"));
         network.setForecastDistance(0);
 
@@ -129,10 +129,10 @@ public final class BatteryNetworkFactory {
                 .setId("BAT2")
                 .setBus(nbat.getId())
                 .setConnectableBus(nbat.getId())
-                .setP0(9999.99)
-                .setQ0(9999.99)
-                .setMinP(-9999.99)
-                .setMaxP(9999.99)
+                .setP0(100)
+                .setQ0(200)
+                .setMinP(-200)
+                .setMaxP(200)
                 .add();
         battery2.newReactiveCapabilityCurve()
                 .beginPoint()
